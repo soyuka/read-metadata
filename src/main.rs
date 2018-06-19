@@ -16,19 +16,6 @@ extern crate error_chain;
 #[macro_use]
 extern crate log;
 
-// @TODO: copied from error_chain without knowing what it does, investigate
-mod errors {
-    // Create the Error, ErrorKind, ResultExt, and Result types
-    error_chain!{}
-}
-
-error_chain! {
-    foreign_links {
-        ReqError(reqwest::Error);
-        IoError(std::io::Error);
-    }
-}
-
 #[derive(Deserialize)]
 struct Input {
     id: String,
@@ -50,6 +37,15 @@ use scraper::{Html,Selector};
 use std::io::prelude::*;
 use std::io;
 use url::{Url, ParseError};
+
+// declare our errors
+error_chain!{
+    foreign_links {
+        ReqError(reqwest::Error);
+        IoError(std::io::Error);
+        UrlError(ParseError);
+    }
+}
 
 /// Read a <meta> element's "content" attribute value
 ///
@@ -99,12 +95,11 @@ fn sanitize_href(href: String, origin: String) -> Result<String> {
     let mut parsed_href = Url::parse(&href);
 
     if parsed_href == Err(ParseError::RelativeUrlWithoutBase) {
-        // operator ? should work here but looks like reqwest is overriding the types of Url?
-        let parsed_origin = Url::parse(&origin).unwrap();
+        let parsed_origin = Url::parse(&origin)?;
         parsed_href = parsed_origin.join(&href);
     }
 
-    Ok(parsed_href.unwrap().as_str().to_string())
+    Ok(parsed_href?.as_str().to_string())
 }
 
 /// Reads metadata from a given url
@@ -134,7 +129,7 @@ fn read_metadata(url: String, id: String) -> Result<Output> {
 
     if favicon != None {
         let favicon_href = favicon.unwrap().value().attr("href").unwrap().to_string();
-        favicon_buffer = get_favicon(sanitize_href(favicon_href, url)?).unwrap();
+        favicon_buffer = get_favicon(sanitize_href(favicon_href, url)?)?;
     }
 
     Ok(Output {
